@@ -31,6 +31,32 @@ type TrackerResp struct {
 	Peers    string `bencode:"peers"`
 }
 
+func FindPeers(tf *TorrentFile) []PeerInfo {
+
+	url, err := buildURL(tf)
+	if err != nil {
+		fmt.Println("Build URL error: " + err.Error())
+		return nil
+	}
+
+	cli := &http.Client{Timeout: 15 * time.Second}
+	resp, err := cli.Get(url)
+	if err != nil {
+		fmt.Println("http get request error: " + err.Error())
+		return nil
+	}
+	defer resp.Body.Close()
+
+	trackerResp := new(TrackerResp)
+	err = bencode.Unmarshal(resp.Body, trackerResp)
+	if err != nil {
+		fmt.Println("[FindPeers] unmarshal error: " + err.Error())
+		return nil
+	}
+
+	return buildPeerInfo([]byte(trackerResp.Peers))
+}
+
 func buildURL(tf *TorrentFile) (string, error) {
 
 	// peer的唯一标识，简单随机生成
@@ -60,44 +86,24 @@ func buildURL(tf *TorrentFile) (string, error) {
 	return base.String(), nil
 }
 
-func FindPeers(tf *TorrentFile) []PeerInfo {
-
-	url, err := buildURL(tf)
-	if err != nil {
-		fmt.Println("Build URL error: " + err.Error())
-		return nil
-	}
-
-	cli := &http.Client{Timeout: 15 * time.Second}
-	resp, err := cli.Get(url)
-	if err != nil {
-		fmt.Println("http get request error: " + err.Error())
-		return nil
-	}
-	defer resp.Body.Close()
-
-	trackerResp := new(TrackerResp)
-	err = bencode.Unmarshal(resp.Body, trackerResp)
-	if err != nil {
-		fmt.Println("[FindPeers] unmarshal error: " + err.Error())
-		return nil
-	}
-
-	return buildPeerInfo([]byte(trackerResp.Peers))
-}
-
 func buildPeerInfo(peers []byte) []PeerInfo {
+	// 计算peer数量，每个peer占用6字节(4字节IP + 2字节端口)
+	num := len(peers) / PeerLen // PeerLen = 6
 
-	num := len(peers) / PeerLen
+	// 验证数据格式是否正确（总字节数必须是6的倍数）
 	if len(peers)%PeerLen != 0 {
 		fmt.Println("Received Malformed peers")
 		return nil
 	}
 
+	// 创建PeerInfo切片，长度为peer数量
 	infos := make([]PeerInfo, num)
 	for i := range num {
+		// 计算当前peer的起始位置
 		offset := i * PeerLen
+		// 提取IP地址（前4个字节）
 		infos[i].Ip = net.IP(peers[offset : offset+IpLen])
+		// 提取端口号（后2个字节），使用大端序解析
 		infos[i].Port = binary.BigEndian.Uint16(peers[offset+IpLen : offset+PeerLen])
 	}
 
