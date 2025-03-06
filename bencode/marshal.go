@@ -40,7 +40,11 @@ func marshalDict(w io.Writer, v reflect.Value) int {
 	for i := range v.NumField() {
 		fv := v.Field(i)
 		ft := v.Type().Field(i)
-		len += EncodeString(w, strings.ToLower(ft.Name))
+		key := ft.Tag.Get("bencode")
+		if key == "" {
+			key = strings.ToLower(ft.Name)
+		}
+		len += EncodeString(w, key)
 		len += marshalValue(w, fv)
 	}
 	w.Write([]byte{'e'})
