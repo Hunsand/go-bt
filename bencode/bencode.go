@@ -1,10 +1,9 @@
-package main
+package bencode
 
 import (
 	"bufio"
 	"errors"
 	"io"
-	"reflect"
 )
 
 type BType uint8
@@ -21,34 +20,6 @@ type BValue interface{}
 type BObject struct {
 	type_ BType
 	val_  BValue
-}
-
-// torrent -> struct 参数s就是传入的结构体指针，函数用来把torrent的数据填充到s中，所以要传入指针
-// 先把文本解析为BObject，再把BObject填充到struct中
-func Unmarshal(r io.Reader, s interface{}) error {
-	// 解析文件文本为BObject
-	o, err := Parse(r)
-	if err != nil {
-		return err
-	}
-	p := reflect.ValueOf(s)
-	if p.Kind() != reflect.Ptr {
-		return errors.New("dest must be a pointer")
-	}
-
-	switch o.type_ {
-	case BLIST:
-		list, _ := o.List()
-		l := reflect.MakeSlice(p.Elem().Type(), len(list), len(list))
-		p.Elem().Set(l)
-
-	case BDICT:
-
-	default:
-		return errors.New("src is unsupported type")
-	}
-
-	return nil
 }
 
 // 返回val
